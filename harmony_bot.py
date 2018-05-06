@@ -11,6 +11,8 @@ logging.basicConfig(level=logging.INFO)
 prefix = '?' # Command prefix. Change to your liking.
 bot_description = 'A bot inspired by ponies! Currently under development'
 bot = commands.Bot(command_prefix=prefix, description=bot_description)
+# Create Globals
+global volume_level
 # Set startup functionality. "Playing" status can be set in change_presence, usually used to display help command.
 @bot.event
 async def on_ready():
@@ -19,8 +21,8 @@ async def on_ready():
     print(bot.user.id)
     print('------')
     await bot.change_presence(game=discord.Game(name='!help'))
-    global player #TODO delete the player value below
-    global volume = 25 #TODO set this up
+    #global player #TODO delete the player value below
+    volume_init(25)
 
 # ***Bot Settings END***
 
@@ -122,13 +124,35 @@ async def url(ctx, url):
     try:
         player = await voice.create_ytdl_player(url) # Get audio stream from URL, assign to player
     except:
-        # Excepts if the url does not work.
+        # Excepts if the url does not work. This currently does not work, I'll have to figure it out.
         await bot.say("Invalid url!")
         return
     # With voice connected and player set up, notify user and begin audio playback.
     await bot.say("Hear me in " + channel_name)
-    player.volume = 0.1
+    player.volume = volume_level
     player.start()
+def volume_init(input):
+    new_volume = volume_manipulator(input)
+    if new_volume is False:
+        print("Initial volume out of bounds, using default value instead!")
+        volume_level = 0.1
+    else:
+        print("Initialized volume set to " + str(input) + "%")
+        volume_level = new_volume
+
+
+def volume_manipulator(input):
+    # Set the adjusted min and max volumes. These are floats between 0 and 2.0
+    max = 0.4
+    min = 0.0
+    input = float(input)
+    # The user will enter a number range of 0-100. The number will be adjusted proportionately to the "max" value
+    vol_adjusted = input / 250  # 250 will adjust the volume proportionately to 0.4.
+    # Check if user input is within range. Adjust volume if it is. Adjust values as necessary.
+    if vol_adjusted > max or vol_adjusted < min:
+        return False
+    else: return vol_adjusted
+
 
 @play.command()
 async def volume(vol = None):
@@ -143,21 +167,16 @@ async def volume(vol = None):
         except:
             await bot.say("Cant show volume if the player hasn't been started at least once!")
             return
-    # Set the adjusted min and max volumes. These are floats between 0 and 2.0
-    max = 0.4
-    min = 0.0
-    vol = float(vol)
-    # The user will enter a number range of 0-100. The number will be adjusted proportionately to the "max" value
-    vol_adjusted = vol/250 # 250 will adjust the volume proportionately to 0.4.
-    # Check if user input is within range. Adjust volume if it is. Adjust values as necessary.
-    if vol_adjusted > max or vol_adjusted < min:
-        await bot.say("Must be between 0.0 and 100!")
+    new_volume = volume_manipulator(vol)
+    if new_volume is False:
+        await bot.say("Must be between 0 and 100!")
         return
+    else: volume_level = new_volume
     try:
-        player.volume = vol_adjusted
+        player.volume = new_volume
         await bot.say("Volume is now " + str(player.volume * 250) + "/100")
     except Exception:
-        await bot.say("Cant change volume if the player hasn't been started at least once!")
+        await bot.say("Volume set to " + str(volume_level * 250) + ". Will be applied to next reconnect.")
 
 @bot.command()
 async def stop():
@@ -205,4 +224,4 @@ token = str.strip(tk_file.read())
 try:
     bot.run(token)
 except InvalidArguement:
-    print("succccccc")
+    print("Launch failed! Did you provide a valid token?")
