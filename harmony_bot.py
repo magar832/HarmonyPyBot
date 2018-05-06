@@ -89,6 +89,7 @@ async def play(ctx):
 @play.command(pass_context=True)
 async def url(ctx, url):
     """📖Plays audio from a single URL"""
+    global volume_level
     # Stop current audio playing.
     try:
         player
@@ -97,7 +98,7 @@ async def url(ctx, url):
     except:
         pass
     server_id = ctx.message.server.id
-    channel = bot.get_channel('300454519467409410')
+    channel = bot.get_channel('442701724159967232')
     channel_name = channel.name
     # Create voice object globally, set encoding options, connect to channel.
     global voice
@@ -109,7 +110,7 @@ async def url(ctx, url):
         # If voice object doesnt exist, make it and set it up.
         voice = await bot.join_voice_channel(channel) # Create voice and join channel
         await bot.say("Connected to channel!")
-        discord.VoiceClient.encoder_options(voice, sample_rate=48000, channels=1) # Set encoder options
+        discord.VoiceClient.encoder_options(voice, sample_rate=48000, channels=2) # Set encoder options
     else:
         # If voice object exists, check if its connected. If not, reconnect and set encoder options.
         if voice.is_connected() is False:
@@ -132,6 +133,7 @@ async def url(ctx, url):
     player.volume = volume_level
     player.start()
 def volume_init(input):
+    global volume_level
     new_volume = volume_manipulator(input)
     if new_volume is False:
         print("Initial volume out of bounds, using default value instead!")
@@ -143,11 +145,11 @@ def volume_init(input):
 
 def volume_manipulator(input):
     # Set the adjusted min and max volumes. These are floats between 0 and 2.0
-    max = 0.4
+    max = 0.2
     min = 0.0
     input = float(input)
     # The user will enter a number range of 0-100. The number will be adjusted proportionately to the "max" value
-    vol_adjusted = input / 250  # 250 will adjust the volume proportionately to 0.4.
+    vol_adjusted = input / 500  # 500 will adjust the volume proportionately to 0.4.
     # Check if user input is within range. Adjust volume if it is. Adjust values as necessary.
     if vol_adjusted > max or vol_adjusted < min:
         return False
@@ -158,6 +160,7 @@ def volume_manipulator(input):
 async def volume(vol = None):
     """📖Set the volume for Harmony"""
     # Calling "!play volume" will display the current volume
+    global volume_level
     if vol is None:
         try:
             await bot.say("Current volume is " + str(player.volume * 250) + "/100")
@@ -173,7 +176,7 @@ async def volume(vol = None):
         return
     else: volume_level = new_volume
     try:
-        player.volume = new_volume
+        player.volume = volume_level
         await bot.say("Volume is now " + str(player.volume * 250) + "/100")
     except Exception:
         await bot.say("Volume set to " + str(volume_level * 250) + ". Will be applied to next reconnect.")
