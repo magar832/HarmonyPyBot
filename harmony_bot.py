@@ -11,6 +11,8 @@ logging.basicConfig(level=logging.INFO)
 prefix = '?' # Command prefix. Change to your liking.
 bot_description = 'A bot inspired by ponies! Currently under development'
 bot = commands.Bot(command_prefix=prefix, description=bot_description)
+# Create Globals
+global volume_level
 # Set startup functionality. "Playing" status can be set in change_presence, usually used to display help command.
 @bot.event
 async def on_ready():
@@ -19,8 +21,8 @@ async def on_ready():
     print(bot.user.id)
     print('------')
     await bot.change_presence(game=discord.Game(name='!help'))
-    global player #TODO delete the player value below
-    global volume = 25 #TODO set this up
+    #global player #TODO delete the player value below
+    volume_init(15)
 
 # ***Bot Settings END***
 
@@ -74,8 +76,10 @@ async def hours(ctx):
 async def viswax():
     """📖Vis Wax stats for Runescape"""
     await bot.say("Fetching prices...please wait...")
-    output = subprocess.getoutput("printf '\n' | /home/pi/go/bin/viswax")
-    output = output[:output.rfind('\n')]
+    try:
+        output = subprocess.getoutput("printf '\n' | /home/pi/go/bin/viswax")
+        output = output[:output.rfind('\n')]
+    except: await bot.say("Viswax module not installed. Consult your botmin.")
     await bot.say(str(output))
 
 @bot.group(pass_context=True)
@@ -87,6 +91,7 @@ async def play(ctx):
 @play.command(pass_context=True)
 async def url(ctx, url):
     """📖Plays audio from a single URL"""
+    global volume_level
     # Stop current audio playing.
     try:
         player
@@ -95,7 +100,14 @@ async def url(ctx, url):
     except:
         pass
     server_id = ctx.message.server.id
-    channel = bot.get_channel('300454519467409410')
+    if ctx.message.author.voice_channel is None:
+        await bot.say("You have to be in a voice channel!")
+        return
+    # Check the command author's voice channel id. This is for the bot to join their channel.
+    channel_id = ctx.message.author.voice_channel.id
+    # Get the channel object specified from the obtained channel id.
+    channel = bot.get_channel(str(channel_id))
+    # Get the channel's name.
     channel_name = channel.name
     # Create voice object globally, set encoding options, connect to channel.
     global voice
@@ -107,7 +119,7 @@ async def url(ctx, url):
         # If voice object doesnt exist, make it and set it up.
         voice = await bot.join_voice_channel(channel) # Create voice and join channel
         await bot.say("Connected to channel!")
-        discord.VoiceClient.encoder_options(voice, sample_rate=48000, channels=1) # Set encoder options
+        discord.VoiceClient.encoder_options(voice, sample_rate=48000, channels=2) # Set encoder options
     else:
         # If voice object exists, check if its connected. If not, reconnect and set encoder options.
         if voice.is_connected() is False:
@@ -122,42 +134,66 @@ async def url(ctx, url):
     try:
         player = await voice.create_ytdl_player(url) # Get audio stream from URL, assign to player
     except:
-        # Excepts if the url does not work.
+        # Excepts if the url does not work. This currently does not work, I'll have to figure it out.
         await bot.say("Invalid url!")
         return
     # With voice connected and player set up, notify user and begin audio playback.
     await bot.say("Hear me in " + channel_name)
-    player.volume = 0.1
+    player.volume = volume_level
     player.start()
+# Initialize the volume level upon bot run.
+def volume_init(input):
+    global volume_level
+    new_volume = volume_manipulator(input)
+    if new_volume is False:
+        print("Initial volume out of bounds, using default value instead!")
+        volume_level = 0.1
+    else:
+        print("Initialized volume set to " + str(input) + "%")
+        volume_level = new_volume
+
+# Manipulation method for the user volume input.
+def volume_manipulator(input):
+    # Set the adjusted min and max volumes. These are floats between 0 and 2.0
+    max = 0.2
+    min = 0.0
+    try:
+        input = float(input)
+    except ValueError: # If input isn't a float, return False.
+        return False
+    # The user will enter a number range of 0-100. The number will be adjusted proportionately to the "max" value
+    vol_adjusted = input / 500  # 500 will adjust the volume proportionately to 0.4.
+    # Check if user input is within range. Adjust volume if it is. If not, return with False.
+    if vol_adjusted > max or vol_adjusted < min:
+        return False
+    else: return vol_adjusted
+
 
 @play.command()
 async def volume(vol = None):
     """📖Set the volume for Harmony"""
     # Calling "!play volume" will display the current volume
+    global volume_level
     if vol is None:
         try:
-            await bot.say("Current volume is " + str(player.volume * 250) + "/100")
+            await bot.say("Current volume is " + str(player.volume * 500) + "/100")
             return
         except TypeError:
-            pass
+            await bot.say("Error!")
+            return
         except:
             await bot.say("Cant show volume if the player hasn't been started at least once!")
             return
-    # Set the adjusted min and max volumes. These are floats between 0 and 2.0
-    max = 0.4
-    min = 0.0
-    vol = float(vol)
-    # The user will enter a number range of 0-100. The number will be adjusted proportionately to the "max" value
-    vol_adjusted = vol/250 # 250 will adjust the volume proportionately to 0.4.
-    # Check if user input is within range. Adjust volume if it is. Adjust values as necessary.
-    if vol_adjusted > max or vol_adjusted < min:
-        await bot.say("Must be between 0.0 and 100!")
+    new_volume = volume_manipulator(vol)
+    if new_volume is False:
+        await bot.say("Must be a number between 0 and 100!")
         return
+    else: volume_level = new_volume
     try:
-        player.volume = vol_adjusted
-        await bot.say("Volume is now " + str(player.volume * 250) + "/100")
+        player.volume = volume_level
+        await bot.say("Volume is now " + str(player.volume * 500) + "/100")
     except Exception:
-        await bot.say("Cant change volume if the player hasn't been started at least once!")
+        await bot.say("Volume set to " + str(volume_level * 500) + ". Will be applied to next reconnect.")
 
 @bot.command()
 async def stop():
@@ -205,4 +241,4 @@ token = str.strip(tk_file.read())
 try:
     bot.run(token)
 except InvalidArguement:
-    print("succccccc")
+    print("Launch failed! Did you provide a valid token?")
