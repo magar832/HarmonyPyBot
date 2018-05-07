@@ -22,7 +22,7 @@ async def on_ready():
     print('------')
     await bot.change_presence(game=discord.Game(name='!help'))
     #global player #TODO delete the player value below
-    volume_init(25)
+    volume_init(15)
 
 # ***Bot Settings END***
 
@@ -76,8 +76,10 @@ async def hours(ctx):
 async def viswax():
     """📖Vis Wax stats for Runescape"""
     await bot.say("Fetching prices...please wait...")
-    output = subprocess.getoutput("printf '\n' | /home/pi/go/bin/viswax")
-    output = output[:output.rfind('\n')]
+    try:
+        output = subprocess.getoutput("printf '\n' | /home/pi/go/bin/viswax")
+        output = output[:output.rfind('\n')]
+    except: await bot.say("Viswax module not installed. Consult your botmin.")
     await bot.say(str(output))
 
 @bot.group(pass_context=True)
@@ -98,7 +100,14 @@ async def url(ctx, url):
     except:
         pass
     server_id = ctx.message.server.id
-    channel = bot.get_channel('442701724159967232')
+    if ctx.message.author.voice_channel is None:
+        await bot.say("You have to be in a voice channel!")
+        return
+    # Check the command author's voice channel id. This is for the bot to join their channel.
+    channel_id = ctx.message.author.voice_channel.id
+    # Get the channel object specified from the obtained channel id.
+    channel = bot.get_channel(str(channel_id))
+    # Get the channel's name.
     channel_name = channel.name
     # Create voice object globally, set encoding options, connect to channel.
     global voice
@@ -132,6 +141,7 @@ async def url(ctx, url):
     await bot.say("Hear me in " + channel_name)
     player.volume = volume_level
     player.start()
+# Initialize the volume level upon bot run.
 def volume_init(input):
     global volume_level
     new_volume = volume_manipulator(input)
@@ -142,15 +152,18 @@ def volume_init(input):
         print("Initialized volume set to " + str(input) + "%")
         volume_level = new_volume
 
-
+# Manipulation method for the user volume input.
 def volume_manipulator(input):
     # Set the adjusted min and max volumes. These are floats between 0 and 2.0
     max = 0.2
     min = 0.0
-    input = float(input)
+    try:
+        input = float(input)
+    except ValueError: # If input isn't a float, return False.
+        return False
     # The user will enter a number range of 0-100. The number will be adjusted proportionately to the "max" value
     vol_adjusted = input / 500  # 500 will adjust the volume proportionately to 0.4.
-    # Check if user input is within range. Adjust volume if it is. Adjust values as necessary.
+    # Check if user input is within range. Adjust volume if it is. If not, return with False.
     if vol_adjusted > max or vol_adjusted < min:
         return False
     else: return vol_adjusted
@@ -163,23 +176,24 @@ async def volume(vol = None):
     global volume_level
     if vol is None:
         try:
-            await bot.say("Current volume is " + str(player.volume * 250) + "/100")
+            await bot.say("Current volume is " + str(player.volume * 500) + "/100")
             return
         except TypeError:
-            pass
+            await bot.say("Error!")
+            return
         except:
             await bot.say("Cant show volume if the player hasn't been started at least once!")
             return
     new_volume = volume_manipulator(vol)
     if new_volume is False:
-        await bot.say("Must be between 0 and 100!")
+        await bot.say("Must be a number between 0 and 100!")
         return
     else: volume_level = new_volume
     try:
         player.volume = volume_level
-        await bot.say("Volume is now " + str(player.volume * 250) + "/100")
+        await bot.say("Volume is now " + str(player.volume * 500) + "/100")
     except Exception:
-        await bot.say("Volume set to " + str(volume_level * 250) + ". Will be applied to next reconnect.")
+        await bot.say("Volume set to " + str(volume_level * 500) + ". Will be applied to next reconnect.")
 
 @bot.command()
 async def stop():
